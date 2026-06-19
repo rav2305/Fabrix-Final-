@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Fabrix Admin{% endblock %}</title>
+    <!-- Google Fonts & Line Icons -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="mobile-header">
+        <span class="invoice-logo" style="font-size: 1.5rem; color: var(--gold-dark);">FABRIX</span>
+        <button class="menu-toggle" id="menuToggle">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">FABRIX</div>
+            <nav style="flex: 1;">
+                <ul class="nav-links">
+                    <li class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+                        <a href="{{ url_for('dashboard') }}">
+                            <i class="fa-solid fa-chart-line"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="{% if request.endpoint == 'stock' %}active{% endif %}">
+                        <a href="{{ url_for('stock') }}">
+                            <i class="fa-solid fa-boxes-stacked"></i> Stock Management
+                        </a>
+                    </li>
+                    <li class="{% if request.endpoint == 'create_invoice' %}active{% endif %}">
+                        <a href="{{ url_for('create_invoice') }}">
+                            <i class="fa-solid fa-file-invoice-dollar"></i> New Invoice
+                        </a>
+                    </li>
+                    <li class="{% if request.endpoint == 'purchases' %}active{% endif %}">
+                        <a href="{{ url_for('purchases') }}">
+                            <i class="fa-solid fa-truck-ramp-box"></i> Dealer Purchases
+                        </a>
+                    </li>
+                    <li class="{% if request.endpoint == 'reports' %}active{% endif %}">
+                        <a href="{{ url_for('reports') }}">
+                            <i class="fa-solid fa-chart-pie"></i> Reports & Sales
+                        </a>
+                    </li>
+                    {% if current_user.is_authenticated and current_user.is_admin() %}
+                    <li class="{% if request.endpoint == 'users' %}active{% endif %}">
+                        <a href="{{ url_for('users') }}">
+                            <i class="fa-solid fa-users-gear"></i> User Access
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    Logged in as: <span>{{ current_user.username }}</span> ({{ current_user.role|capitalize }})
+                </div>
+                <a href="{{ url_for('logout') }}" class="logout-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Breadcrumbs / Top Header for Desktop -->
+            <header class="top-header">
+                <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+                <div class="header-actions">
+                    {% block header_actions %}{% endblock %}
+                </div>
+            </header>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{% if category == 'error' %}danger{% else %}{{ category }}{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Toggle sidebar script on mobile -->
+    <script>
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('open');
+            const icon = menuToggle.querySelector('i');
+            if (sidebar.classList.contains('open')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-xmark');
+            } else {
+                icon.classList.remove('fa-xmark');
+                icon.classList.add('fa-bars');
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== menuToggle) {
+                sidebar.classList.remove('open');
+                const icon = menuToggle.querySelector('i');
+                icon.classList.remove('fa-xmark');
+                icon.classList.add('fa-bars');
+            }
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

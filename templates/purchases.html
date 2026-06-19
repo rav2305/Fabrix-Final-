@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Dealer Purchases - Fabrix Admin{% endblock %}
+
+{% block page_title %}Dealer Purchases{% endblock %}
+
+{% block header_actions %}
+<button class="btn btn-primary" onclick="openAddPurchaseModal()">
+    <i class="fa-solid fa-plus"></i> Record Purchase
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Metrics Summary for Purchases -->
+<div class="summary-grid" style="margin-bottom: 2.5rem;">
+    <div class="card">
+        <div class="card-title">Total Supplier Bills</div>
+        <div class="card-value">₹{{ "{:,.2f}".format(total_purchase_cost) }}</div>
+        <div class="card-subtitle">From {{ purchases|length }} dealer orders</div>
+    </div>
+    
+    <div class="card" style="border-top-color: #2E7D32;">
+        <div class="card-title">Total Paid to Dealers</div>
+        <div class="card-value" style="color: #2E7D32;">₹{{ "{:,.2f}".format(total_purchase_paid) }}</div>
+        <div class="card-subtitle">Amount settled so far</div>
+    </div>
+    
+    <div class="card" style="border-top-color: #EF6C00;">
+        <div class="card-title">Total Outstanding Balance</div>
+        <div class="card-value" style="color: #EF6C00;">₹{{ "{:,.2f}".format(total_purchase_cost - total_purchase_paid) }}</div>
+        <div class="card-subtitle">Pending dealer liabilities</div>
+    </div>
+</div>
+
+<!-- Purchases List -->
+<div class="card" style="padding: 1.5rem;">
+    <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark); margin-bottom: 1.2rem;">
+        Purchase Ledgers
+    </h3>
+
+    <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Dealer Name</th>
+                    <th>Product / Description</th>
+                    <th>Qty</th>
+                    <th>Total Cost</th>
+                    <th>Amount Paid</th>
+                    <th>Outstanding</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for purchase in purchases %}
+                <tr>
+                    <td>{{ purchase.date_created.strftime('%d-%b-%Y') }}</td>
+                    <td><strong>{{ purchase.dealer_name }}</strong></td>
+                    <td>{{ purchase.product_description or '-' }}</td>
+                    <td>{{ purchase.quantity }}</td>
+                    <td>₹{{ "{:,.2f}".format(purchase.total_cost) }}</td>
+                    <td>₹{{ "{:,.2f}".format(purchase.amount_paid) }}</td>
+                    <td style="font-weight: 600; color: {% if purchase.outstanding_amount > 0 %}#EF6C00{% else %}var(--text-primary){% endif %};">
+                        ₹{{ "{:,.2f}".format(purchase.outstanding_amount) }}
+                    </td>
+                    <td>
+                        {% if purchase.payment_status == 'Paid' %}
+                        <span class="badge badge-success">Paid</span>
+                        {% elif purchase.payment_status == 'Partial' %}
+                        <span class="badge badge-warning">Partial</span>
+                        {% else %}
+                        <span class="badge badge-danger">Unpaid</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary btn-small" onclick="openPaymentModal('{{ purchase.id }}', '{{ purchase.dealer_name|escape }}', '{{ purchase.total_cost }}', '{{ purchase.amount_paid }}')">
+                            <i class="fa-solid fa-indian-rupee-sign"></i> Update Payment
+                        </button>
+                        {% if current_user.is_admin() %}
+                        <form action="{{ url_for('delete_purchase', purchase_id=purchase.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this purchase ledger?');">
+                            <button type="submit" class="btn btn-danger btn-small" style="padding: 0.4rem 0.6rem;">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <i class="fa-solid fa-truck-moving" style="font-size: 3rem; color: var(--gold-light); margin-bottom: 1rem; display: block;"></i>
+                        No dealer purchases recorded yet. Click "Record Purchase" to add your first bill.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Record Purchase -->
+<div class="modal" id="addPurchaseModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Record Dealer Purchase</h3>
+            <button class="close-modal" onclick="closeAddPurchaseModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('add_purchase') }}" method="POST">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="p_dealer">Dealer / Supplier Name</label>
+                    <input type="text" id="p_dealer" name="dealer_name" class="form-control" placeholder="e.g. Jindal Textiles" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="p_desc">Product / Description</label>
+                    <input type="text" id="p_desc" name="product_description" class="form-control" placeholder="e.g. Linen fabric rolls, Jeans stock" required autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="p_qty">Quantity (Optional)</label>
+                        <input type="number" id="p_qty" name="quantity" class="form-control" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="p_cost">Total Bill Cost (₹)</label>
+                        <input type="number" step="0.01" id="p_cost" name="total_cost" class="form-control" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="p_paid">Amount Paid Initially (₹)</label>
+                    <input type="number" step="0.01" id="p_paid" name="amount_paid" class="form-control" value="0.00" min="0" required>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closeAddPurchaseModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Record Bill</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Update Payment -->
+<div class="modal" id="paymentModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Update Dealer Payment</h3>
+            <button class="close-modal" onclick="closePaymentModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('update_purchase_payment') }}" method="POST">
+            <input type="hidden" id="pay_id" name="id">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Dealer Name</label>
+                    <input type="text" id="pay_dealer" class="form-control" readonly style="background-color: var(--bg-secondary);">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Total Bill Cost</label>
+                        <input type="text" id="pay_total" class="form-control" readonly style="background-color: var(--bg-secondary);">
+                    </div>
+                    <div class="form-group">
+                        <label>Currently Paid</label>
+                        <input type="text" id="pay_paid_current" class="form-control" readonly style="background-color: var(--bg-secondary);">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="pay_amount_new">New Total Paid Amount (₹)</label>
+                    <input type="number" step="0.01" id="pay_amount_new" name="amount_paid" class="form-control" required min="0">
+                    <small style="color: var(--text-secondary); margin-top: 0.2rem; display: block;">
+                        Enter the total aggregate amount paid to this dealer for this bill.
+                    </small>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closePaymentModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Payment</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const addPurchaseModal = document.getElementById('addPurchaseModal');
+    function openAddPurchaseModal() {
+        addPurchaseModal.style.display = 'flex';
+        document.getElementById('p_dealer').focus();
+    }
+    function closeAddPurchaseModal() {
+        addPurchaseModal.style.display = 'none';
+    }
+
+    const paymentModal = document.getElementById('paymentModal');
+    function openPaymentModal(id, name, total, paid) {
+        document.getElementById('pay_id').value = id;
+        document.getElementById('pay_dealer').value = name;
+        document.getElementById('pay_total').value = '₹' + parseFloat(total).toFixed(2);
+        document.getElementById('pay_paid_current').value = '₹' + parseFloat(paid).toFixed(2);
+        
+        const amountInput = document.getElementById('pay_amount_new');
+        amountInput.value = parseFloat(paid).toFixed(2);
+        amountInput.max = parseFloat(total).toFixed(2);
+        
+        paymentModal.style.display = 'flex';
+        amountInput.focus();
+    }
+    function closePaymentModal() {
+        paymentModal.style.display = 'none';
+    }
+
+    // Close modals on outside click
+    window.onclick = function(event) {
+        if (event.target === addPurchaseModal) {
+            closeAddPurchaseModal();
+        }
+        if (event.target === paymentModal) {
+            closePaymentModal();
+        }
+    }
+</script>
+{% endblock %}

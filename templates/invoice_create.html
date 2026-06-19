@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Create Invoice - Fabrix Admin{% endblock %}
+
+{% block page_title %}New Invoice{% endblock %}
+
+{% block content %}
+<form action="{{ url_for('create_invoice') }}" method="POST" id="invoiceForm">
+    <div class="invoice-wrapper">
+        <!-- Main Invoice Composition Card -->
+        <div class="card" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1.2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--gold-dark);">
+                <i class="fa-solid fa-file-invoice"></i> Customer & Items
+            </h3>
+            
+            <!-- Customer info row -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="customer_name">Customer Name</label>
+                    <input type="text" id="customer_name" name="customer_name" class="form-control" placeholder="Walk-in Customer" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="customer_phone">Customer Phone (for WhatsApp sharing)</label>
+                    <input type="tel" id="customer_phone" name="customer_phone" class="form-control" placeholder="e.g. 9876543210" pattern="[0-9]{10}" title="Ten-digit phone number" autocomplete="off">
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <h4 style="margin: 1.5rem 0 0.8rem 0; font-family: var(--font-sans); font-size: 0.95rem; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">
+                Billing Items
+            </h4>
+            <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 1rem;">
+                <table class="custom-table item-list-table" id="invoiceItemsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 45%;">Product</th>
+                            <th style="width: 15%;">Stock</th>
+                            <th style="width: 15%;">Price (₹)</th>
+                            <th style="width: 12%;">Qty</th>
+                            <th style="width: 13%;">Total (₹)</th>
+                            <th style="width: 5%; text-align: center;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoiceItemsBody">
+                        <!-- Dynamic Rows Inserted Here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="button" class="btn btn-secondary" onclick="addItemRow()">
+                <i class="fa-solid fa-plus"></i> Add Item Row
+            </button>
+        </div>
+
+        <!-- Sidebar Summary & Submit Panel -->
+        <div class="invoice-summary-box">
+            <h3 style="margin-bottom: 1.2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--gold-dark); font-family: var(--font-serif);">
+                Order Summary
+            </h3>
+            
+            <div class="form-group">
+                <label for="payment_method">Payment Method</label>
+                <select name="payment_method" id="payment_method" class="form-control">
+                    <option value="Cash">Cash</option>
+                    <option value="UPI / QR Code">UPI / QR Code</option>
+                    <option value="Card">Card</option>
+                    <option value="Net Banking">Net Banking</option>
+                </select>
+            </div>
+
+            <div style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                <div class="summary-row">
+                    <span>Subtotal:</span>
+                    <strong id="summarySubtotal">₹0.00</strong>
+                </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label for="discount" style="font-size: 0.8rem; color: var(--text-secondary);">Discount (₹)</label>
+                    <input type="number" step="0.01" id="discount" name="discount" class="form-control" value="0.00" min="0" oninput="calculateTotals()" style="padding: 0.4rem;">
+                </div>
+                <div class="summary-row total">
+                    <span>Grand Total:</span>
+                    <strong id="summaryGrandTotal">₹0.00</strong>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem; padding: 0.8rem;">
+                <i class="fa-solid fa-file-invoice-dollar"></i> Generate Invoice
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Load products list from flask Context as JSON
+    const products = [
+        {% for product in products %}
+        {
+            id: {{ product.id }},
+            name: "{{ product.name|escape }}",
+            quantity: {{ product.quantity }},
+            selling_price: {{ product.selling_price }},
+            cost_price: {{ product.cost_price }}
+        },
+        {% endfor__ %}
+    ];
+    // Remove the trailing separator template issues
+    // Let's parse properly:
+    const catalog = {
+        {% for product in products %}
+        "{{ product.id }}": {
+            id: {{ product.id }},
+            name: "{{ product.name|escape }}",
+            quantity: {{ product.quantity }},
+            selling_price: {{ product.selling_price }}
+        },
+        {% endfor %}
+    };
+
+    let rowCount = 0;
+
+    // Add first row automatically on load
+    window.onload = function() {
+        addItemRow();
+    };
+
+    function addItemRow() {
+        rowCount++;
+        const tbody = document.getElementById('invoiceItemsBody');
+        const row = document.createElement('tr');
+        row.id = `row-${rowCount}`;
+        row.className = 'invoice-row';
+
+        let optionsHtml = '<option value="" disabled selected>-- Select Product --</option>';
+        for (const id in catalog) {
+            const prod = catalog[id];
+            optionsHtml += `<option value="${prod.id}" ${prod.quantity === 0 ? 'disabled' : ''}>${prod.name} (${prod.quantity === 0 ? 'OUT OF STOCK' : 'Qty: ' + prod.quantity})</option>`;
+        }
+
+        row.innerHTML = `
+            <td>
+                <select name="product_id[]" class="form-control select-product" onchange="onProductSelect(${rowCount})" required>
+                    ${optionsHtml}
+                </select>
+            </td>
+            <td>
+                <input type="text" id="stock-${rowCount}" class="form-control" readonly style="background-color: var(--bg-secondary); border-color: transparent;" value="-">
+            </td>
+            <td>
+                <input type="number" step="0.01" name="selling_price[]" id="price-${rowCount}" class="form-control" oninput="onPriceQtyChange(${rowCount})" required>
+            </td>
+            <td>
+                <input type="number" name="quantity[]" id="qty-${rowCount}" class="form-control" min="1" oninput="onPriceQtyChange(${rowCount})" required disabled>
+            </td>
+            <td>
+                <input type="text" id="total-${rowCount}" class="form-control row-total" readonly style="background-color: var(--bg-secondary); border-color: transparent; font-weight: 600;" value="₹0.00">
+            </td>
+            <td style="text-align: center;">
+                <button type="button" class="btn btn-danger btn-small" onclick="removeRow(${rowCount})" style="background-color: transparent; color: #D32F2F; border: none; font-size: 1.1rem; padding: 0.2rem 0.5rem;">
+                    <i class="fa-regular fa-trash-can"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    }
+
+    function removeRow(id) {
+        // Enforce at least one row
+        const rows = document.querySelectorAll('.invoice-row');
+        if (rows.length <= 1) {
+            alert('An invoice must contain at least one item.');
+            return;
+        }
+        const row = document.getElementById(`row-${id}`);
+        if (row) {
+            row.remove();
+            calculateTotals();
+        }
+    }
+
+    function onProductSelect(rowId) {
+        const select = document.querySelector(`#row-${rowId} .select-product`);
+        const prodId = select.value;
+        const prod = catalog[prodId];
+
+        if (prod) {
+            // Fill price and stock details
+            document.getElementById(`stock-${rowId}`).value = prod.quantity;
+            document.getElementById(`price-${rowId}`).value = prod.selling_price.toFixed(2);
+            
+            const qtyInput = document.getElementById(`qty-${rowId}`);
+            qtyInput.disabled = false;
+            qtyInput.value = 1;
+            qtyInput.max = prod.quantity;
+
+            onPriceQtyChange(rowId);
+        }
+    }
+
+    function onPriceQtyChange(rowId) {
+        const price = parseFloat(document.getElementById(`price-${rowId}`).value) || 0;
+        const qtyInput = document.getElementById(`qty-${rowId}`);
+        let qty = parseInt(qtyInput.value) || 0;
+        const maxQty = parseInt(qtyInput.max) || 999999;
+
+        if (qty > maxQty) {
+            alert(`Only ${maxQty} units available in stock for this product.`);
+            qty = maxQty;
+            qtyInput.value = qty;
+        }
+
+        const total = price * qty;
+        document.getElementById(`total-${rowId}`).value = `₹${total.toFixed(2)}`;
+        
+        calculateTotals();
+    }
+
+    function calculateTotals() {
+        let subtotal = 0;
+        const rows = document.querySelectorAll('.invoice-row');
+        
+        rows.forEach(row => {
+            const id = row.id.split('-')[1];
+            const price = parseFloat(document.getElementById(`price-${id}`).value) || 0;
+            const qty = parseInt(document.getElementById(`qty-${id}`).value) || 0;
+            subtotal += price * qty;
+        });
+
+        const discount = parseFloat(document.getElementById('discount').value) || 0;
+        const grandTotal = Math.max(0, subtotal - discount);
+
+        document.getElementById('summarySubtotal').textContent = `₹${subtotal.toFixed(2)}`;
+        document.getElementById('summaryGrandTotal').textContent = `₹${grandTotal.toFixed(2)}`;
+    }
+
+    // Double check form before submitting
+    document.getElementById('invoiceForm').onsubmit = function() {
+        const rows = document.querySelectorAll('.invoice-row');
+        let valid = true;
+        
+        if (rows.length === 0) {
+            alert('Please add at least one product to the invoice.');
+            return false;
+        }
+
+        rows.forEach(row => {
+            const id = row.id.split('-')[1];
+            const select = document.querySelector(`#row-${id} .select-product`);
+            if (!select.value) {
+                alert('Please select a product for all rows.');
+                valid = false;
+            }
+        });
+
+        return valid;
+    };
+</script>
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Management - Fabrix Admin{% endblock %}
+
+{% block page_title %}Stock Management{% endblock %}
+
+{% block header_actions %}
+<button class="btn btn-primary" onclick="openAddModal()">
+    <i class="fa-solid fa-plus"></i> Add Product
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Top Row: Upload Excel and Quick Info -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem;">
+    <!-- Bulk Upload Card -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+            <i class="fa-solid fa-file-import" style="color: var(--gold-primary); margin-right: 8px;"></i> Bulk Import Stock (Excel / CSV)
+        </h3>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.85rem;">
+            Upload your stock list in bulk. Supported formats: <strong>.xlsx, .xls, .csv</strong>. <br>
+            The file must contain these exact headers: <span style="font-weight: 600; color: var(--gold-dark);">Product Name</span>, <span style="font-weight: 600; color: var(--gold-dark);">Qty</span>, <span style="font-weight: 600; color: var(--gold-dark);">Selling Price</span>, <span style="font-weight: 600; color: var(--gold-dark);">Price for us</span>.
+        </p>
+        <form action="{{ url_for('bulk_upload') }}" method="POST" enctype="multipart/form-data" style="display: flex; gap: 1rem; align-items: center;">
+            <div style="flex: 1;">
+                <input type="file" name="excel_file" accept=".xlsx, .xls, .csv" class="form-control" style="padding: 0.45rem;" required>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-upload"></i> Upload
+            </button>
+        </form>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="card" style="padding: 1.5rem; justify-content: center; display: flex; flex-direction: column;">
+        <h3 style="margin-bottom: 0.8rem; font-size: 1.1rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Inventory Overview</h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span>Unique Products:</span>
+            <strong style="color: var(--gold-dark);">{{ products|length }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>Total Stock Quantity:</span>
+            <strong style="color: var(--gold-dark);">{{ products|sum(attribute='quantity') }}</strong>
+        </div>
+    </div>
+</div>
+
+<!-- Stock List Card -->
+<div class="card" style="padding: 1.5rem;">
+    <!-- Search and Filters -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; gap: 1rem;">
+        <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark);">Product Catalog</h3>
+        <div style="position: relative; width: 300px; max-width: 100%;">
+            <input type="text" id="stockSearch" class="form-control" placeholder="Search products..." onkeyup="filterStock()" style="padding-left: 2.2rem;">
+            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
+        </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+        <table class="custom-table" id="stockTable">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>In Stock (Qty)</th>
+                    <th>Selling Price</th>
+                    <th>Price for us (Cost)</th>
+                    <th>Margin (Markup)</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr class="product-row">
+                    <td class="prod-name"><strong>{{ product.name }}</strong></td>
+                    <td>
+                        <span class="badge {% if product.quantity <= 10 %}badge-danger{% elif product.quantity <= 25 %}badge-warning{% else %}badge-success{% endif %}">
+                            {{ product.quantity }} items
+                        </span>
+                    </td>
+                    <td>₹{{ "{:,.2f}".format(product.selling_price) }}</td>
+                    <td>₹{{ "{:,.2f}".format(product.cost_price) }}</td>
+                    <td>
+                        {% if product.cost_price > 0 %}
+                        {% set markup = ((product.selling_price - product.cost_price) / product.cost_price) * 100 %}
+                        <span style="color: #2E7D32; font-weight: 500;">
+                            +{{ "{:.1f}%".format(markup) }}
+                        </span>
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary btn-small" onclick="openEditModal('{{ product.id }}', '{{ product.name|escape }}', '{{ product.quantity }}', '{{ product.selling_price }}', '{{ product.cost_price }}')">
+                            <i class="fa-solid fa-pen-to-square"></i> Edit
+                        </button>
+                        {% if current_user.is_admin() %}
+                        <form action="{{ url_for('delete_product', product_id=product.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this product? This will delete the catalog record.');">
+                            <button type="submit" class="btn btn-danger btn-small" style="padding: 0.4rem 0.6rem;">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <i class="fa-solid fa-box-open" style="font-size: 3rem; color: var(--gold-light); margin-bottom: 1rem; display: block;"></i>
+                        Your product catalog is empty. Add your first item or upload an Excel file.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Add Product -->
+<div class="modal" id="addModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add New Product</h3>
+            <button class="close-modal" onclick="closeAddModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('add_product') }}" method="POST">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="add_name">Product Name</label>
+                    <input type="text" id="add_name" name="name" class="form-control" placeholder="e.g. Linen Shirt" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="add_quantity">Initial Quantity</label>
+                    <input type="number" id="add_quantity" name="quantity" class="form-control" value="0" min="0" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="add_cost_price">Price For Us (Cost Price)</label>
+                        <input type="number" step="0.01" id="add_cost_price" name="cost_price" class="form-control" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="add_selling_price">Selling Price</label>
+                        <input type="number" step="0.01" id="add_selling_price" name="selling_price" class="form-control" placeholder="0.00" required>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Product</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Edit Product -->
+<div class="modal" id="editModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Product</h3>
+            <button class="close-modal" onclick="closeEditModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('edit_product') }}" method="POST">
+            <input type="hidden" id="edit_id" name="id">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="edit_name">Product Name</label>
+                    <input type="text" id="edit_name" name="name" class="form-control" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="edit_quantity">In Stock (Quantity)</label>
+                    <input type="number" id="edit_quantity" name="quantity" class="form-control" min="0" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit_cost_price">Price For Us (Cost Price)</label>
+                        <input type="number" step="0.01" id="edit_cost_price" name="cost_price" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_selling_price">Selling Price</label>
+                        <input type="number" step="0.01" id="edit_selling_price" name="selling_price" class="form-control" required>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Product</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Search Filtering
+    function filterStock() {
+        const query = document.getElementById('stockSearch').value.toLowerCase();
+        const rows = document.querySelectorAll('.product-row');
+        
+        rows.forEach(row => {
+            const name = row.querySelector('.prod-name').textContent.toLowerCase();
+            if (name.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    // Modal Add control
+    const addModal = document.getElementById('addModal');
+    function openAddModal() {
+        addModal.style.display = 'flex';
+        document.getElementById('add_name').focus();
+    }
+    function closeAddModal() {
+        addModal.style.display = 'none';
+    }
+
+    // Modal Edit control
+    const editModal = document.getElementById('editModal');
+    function openEditModal(id, name, qty, sellingPrice, costPrice) {
+        document.getElementById('edit_id').value = id;
+        document.getElementById('edit_name').value = name;
+        document.getElementById('edit_quantity').value = qty;
+        document.getElementById('edit_selling_price').value = sellingPrice;
+        document.getElementById('edit_cost_price').value = costPrice;
+        editModal.style.display = 'flex';
+        document.getElementById('edit_name').focus();
+    }
+    function closeEditModal() {
+        editModal.style.display = 'none';
+    }
+
+    // Close modal if user clicks outside content
+    window.onclick = function(event) {
+        if (event.target === addModal) {
+            closeAddModal();
+        }
+        if (event.target === editModal) {
+            closeEditModal();
+        }
+    }
+</script>
+{% endblock %}

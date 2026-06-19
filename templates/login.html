@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Fabrix Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body style="background-color: var(--bg-secondary);">
+    <div class="login-container">
+        <div class="login-card">
+            <h1 class="login-logo">FABRIX</h1>
+            <p class="login-subtitle">Admin & Staff Portal</p>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{% if category == 'error' %}danger{% else %}{{ category }}{% endif %}" style="padding: 0.6rem; font-size: 0.85rem; margin-bottom: 1rem;">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('login') }}" method="POST">
+                <div class="form-group">
+                    <label for="username"><i class="fa-solid fa-user" style="color: var(--gold-primary); margin-right: 5px;"></i> Username</label>
+                    <input type="text" id="username" name="username" class="form-control" placeholder="Enter username" required autocomplete="off">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label for="password"><i class="fa-solid fa-lock" style="color: var(--gold-primary); margin-right: 5px;"></i> Password</label>
+                    <input type="password" id="password" name="password" class="form-control" placeholder="Enter password" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.8rem;">
+                    Sign In <i class="fa-solid fa-right-to-bracket" style="margin-left: 8px;"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

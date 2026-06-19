@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Fabrix Admin{% endblock %}
+
+{% block page_title %}Reports & Analytics{% endblock %}
+
+{% block content %}
+<!-- Tab Navigation Menu -->
+<div style="display: flex; gap: 1rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0px; margin-bottom: 2rem; overflow-x: auto;" class="no-print">
+    <button class="btn btn-secondary tab-btn active" onclick="switchTab(event, 'sales-tab')" style="border-radius: 4px 4px 0 0; margin-bottom: -2px; border-bottom-color: transparent;">
+        <i class="fa-solid fa-chart-line"></i> Sales & Profit
+    </button>
+    <button class="btn btn-secondary tab-btn" onclick="switchTab(event, 'inventory-tab')" style="border-radius: 4px 4px 0 0; margin-bottom: -2px; border-bottom-color: transparent;">
+        <i class="fa-solid fa-boxes-stacked"></i> Inventory Valuation
+    </button>
+    <button class="btn btn-secondary tab-btn" onclick="switchTab(event, 'dealers-tab')" style="border-radius: 4px 4px 0 0; margin-bottom: -2px; border-bottom-color: transparent;">
+        <i class="fa-solid fa-truck-ramp-box"></i> Dealer Outstandings
+    </button>
+</div>
+
+<!-- TAB 1: Sales & Profit -->
+<div id="sales-tab" class="tab-content active">
+    <div class="summary-grid">
+        <div class="card">
+            <div class="card-title">Gross Sales Revenue</div>
+            <div class="card-value">₹{{ "{:,.2f}".format(sales_revenue) }}</div>
+            <div class="card-subtitle">Aggregate from all client invoices</div>
+        </div>
+        
+        <div class="card" style="border-top-color: #2E7D32;">
+            <div class="card-title">Net Profit Margin</div>
+            <div class="card-value" style="color: #2E7D32;">₹{{ "{:,.2f}".format(net_sales_profit) }}</div>
+            <div class="card-subtitle">Revenue minus actual garment cost</div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">Average Invoice Value</div>
+            <div class="card-value">
+                {% if total_invoices_count > 0 %}
+                ₹{{ "{:,.2f}".format(sales_revenue / total_invoices_count) }}
+                {% else %}
+                ₹0.00
+                {% endif %}
+            </div>
+            <div class="card-subtitle">Across {{ total_invoices_count }} transactions</div>
+        </div>
+    </div>
+
+    <!-- Sales log -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark); margin-bottom: 1.2rem;">
+            Sales Ledger
+        </h3>
+        
+        <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Invoice No</th>
+                        <th>Customer</th>
+                        <th>Date & Time</th>
+                        <th>Subtotal</th>
+                        <th>Discount</th>
+                        <th>Final Paid</th>
+                        <th>Est. Cost</th>
+                        <th>Net Profit</th>
+                        <th class="no-print">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                    <tr>
+                        <td><strong>{{ invoice.invoice_number }}</strong></td>
+                        <td>{{ invoice.customer_name or 'Walk-in' }}</td>
+                        <td>{{ invoice.date_created.strftime('%d-%b-%Y %I:%M %p') }}</td>
+                        <td>₹{{ "{:,.2f}".format(invoice.final_amount + invoice.discount) }}</td>
+                        <td style="color: #C62828;">-₹{{ "{:,.2f}".format(invoice.discount) }}</td>
+                        <td><strong>₹{{ "{:,.2f}".format(invoice.final_amount) }}</strong></td>
+                        
+                        <!-- Compute cost & profit on invoice level -->
+                        {% set invoice_cost = namespace(val=0.0) %}
+                        {% for item in invoice.items %}
+                            {% set invoice_cost.val = invoice_cost.val + (item.cost_price * item.quantity) %}
+                        {% endfor %}
+                        
+                        <td>₹{{ "{:,.2f}".format(invoice_cost.val) }}</td>
+                        <td style="color: #2E7D32; font-weight: 600;">
+                            ₹{{ "{:,.2f}".format(invoice.final_amount - invoice_cost.val) }}
+                        </td>
+                        <td class="no-print">
+                            <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="btn btn-secondary btn-small">
+                                <i class="fa-solid fa-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            No sales recorded yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: Inventory Valuation -->
+<div id="inventory-tab" class="tab-content" style="display: none;">
+    <div class="summary-grid">
+        <div class="card">
+            <div class="card-title">Total Inventory Qty</div>
+            <div class="card-value">{{ total_stock_qty }}</div>
+            <div class="card-subtitle">Aggregate items currently in catalog</div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">Valuation at Cost</div>
+            <div class="card-value">₹{{ "{:,.2f}".format(stock_value_cost) }}</div>
+            <div class="card-subtitle">What we paid for current stock</div>
+        </div>
+        
+        <div class="card" style="border-top-color: #2E7D32;">
+            <div class="card-title">Valuation at Retail</div>
+            <div class="card-value" style="color: #2E7D32;">₹{{ "{:,.2f}".format(stock_value_retail) }}</div>
+            <div class="card-subtitle">Expected revenue if sold at retail price</div>
+        </div>
+
+        <div class="card" style="border-top-color: var(--gold-bright);">
+            <div class="card-title">Unrealized Profit</div>
+            <div class="card-value" style="color: var(--gold-dark);">₹{{ "{:,.2f}".format(stock_value_retail - stock_value_cost) }}</div>
+            <div class="card-subtitle">Potential margin of current stock</div>
+        </div>
+    </div>
+
+    <!-- Inventory valuation list -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark); margin-bottom: 1.2rem;">
+            Stock Asset Breakdown
+        </h3>
+        
+        <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Qty in Stock</th>
+                        <th>Cost Price (Price for us)</th>
+                        <th>Selling Price</th>
+                        <th>Total Cost Value</th>
+                        <th>Total Selling Value</th>
+                        <th>Potential Profit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in products %}
+                    <tr>
+                        <td><strong>{{ prod.name }}</strong></td>
+                        <td>{{ prod.quantity }}</td>
+                        <td>₹{{ "{:,.2f}".format(prod.cost_price) }}</td>
+                        <td>₹{{ "{:,.2f}".format(prod.selling_price) }}</td>
+                        <td>₹{{ "{:,.2f}".format(prod.quantity * prod.cost_price) }}</td>
+                        <td>₹{{ "{:,.2f}".format(prod.quantity * prod.selling_price) }}</td>
+                        <td style="color: #2E7D32; font-weight: 500;">
+                            ₹{{ "{:,.2f}".format(prod.quantity * (prod.selling_price - prod.cost_price)) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            No products in inventory catalog.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 3: Dealer Liabilities -->
+<div id="dealers-tab" class="tab-content" style="display: none;">
+    <div class="summary-grid">
+        <div class="card">
+            <div class="card-title">Total Supplier Bills</div>
+            <div class="card-value">₹{{ "{:,.2f}".format(dealer_total_bill) }}</div>
+            <div class="card-subtitle">Wholesale purchases recorded</div>
+        </div>
+        
+        <div class="card" style="border-top-color: #2E7D32;">
+            <div class="card-title">Paid Out</div>
+            <div class="card-value" style="color: #2E7D32;">₹{{ "{:,.2f}".format(dealer_total_paid) }}</div>
+            <div class="card-subtitle">Amount already settled</div>
+        </div>
+        
+        <div class="card" style="border-top-color: #EF6C00;">
+            <div class="card-title">Dealer Outstanding</div>
+            <div class="card-value" style="color: #EF6C00;">₹{{ "{:,.2f}".format(dealer_total_bill - dealer_total_paid) }}</div>
+            <div class="card-subtitle">Active liabilities to settle</div>
+        </div>
+    </div>
+
+    <!-- Dealer Outstanding List -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark); margin-bottom: 1.2rem;">
+            Dealer Liability Details
+        </h3>
+        
+        <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>Date Recorded</th>
+                        <th>Dealer Name</th>
+                        <th>Description</th>
+                        <th>Quantity purchased</th>
+                        <th>Total Cost</th>
+                        <th>Total Paid</th>
+                        <th>Outstanding Balance</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for purchase in purchases %}
+                    <tr>
+                        <td>{{ purchase.date_created.strftime('%d-%b-%Y') }}</td>
+                        <td><strong>{{ purchase.dealer_name }}</strong></td>
+                        <td>{{ purchase.product_description or '-' }}</td>
+                        <td>{{ purchase.quantity }}</td>
+                        <td>₹{{ "{:,.2f}".format(purchase.total_cost) }}</td>
+                        <td>₹{{ "{:,.2f}".format(purchase.amount_paid) }}</td>
+                        <td style="font-weight: 600; color: {% if purchase.outstanding_amount > 0 %}#EF6C00{% else %}var(--text-primary){% endif %};">
+                            ₹{{ "{:,.2f}".format(purchase.outstanding_amount) }}
+                        </td>
+                        <td>
+                            {% if purchase.payment_status == 'Paid' %}
+                            <span class="badge badge-success">Paid</span>
+                            {% elif purchase.payment_status == 'Partial' %}
+                            <span class="badge badge-warning">Partial</span>
+                            {% else %}
+                            <span class="badge badge-danger">Unpaid</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            No dealer purchases recorded.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function switchTab(evt, tabId) {
+        // Hide all tab contents
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabContents.forEach(content => {
+            content.style.display = 'none';
+        });
+
+        // Deactivate all tab buttons
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        tabBtns.forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.add('btn-secondary');
+            btn.classList.remove('btn-primary');
+        });
+
+        // Show the current tab
+        document.getElementById(tabId).style.display = 'block';
+
+        // Style the active button
+        evt.currentTarget.classList.add('active');
+        evt.currentTarget.classList.remove('btn-secondary');
+        evt.currentTarget.classList.add('btn-primary');
+    }
+</script>
+{% endblock %}
