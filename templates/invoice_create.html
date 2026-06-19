@@ -93,18 +93,7 @@
 
 {% block scripts %}
 <script>
-    // Load products list from flask Context as JSON
-    const products = [
-        {% for product in products %}
-        {
-            id: {{ product.id }},
-            name: "{{ product.name|escape }}",
-            quantity: {{ product.quantity }},
-            selling_price: {{ product.selling_price }},
-            cost_price: {{ product.cost_price }}
-        },
-        {% endfor__ %}
-    ];
+    // Catalog database mapping for billing calculator
     // Remove the trailing separator template issues
     // Let's parse properly:
     const catalog = {
