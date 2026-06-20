@@ -68,6 +68,20 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label>Payment Terms</label>
+                <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; margin-bottom: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; cursor: pointer;">
+                        <input type="radio" name="payment_term" value="full" checked onchange="togglePaymentTerms()" style="accent-color: var(--gold-primary); width: 18px; height: 18px;"> 
+                        Fully Paid
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; cursor: pointer;">
+                        <input type="radio" name="payment_term" value="partial" onchange="togglePaymentTerms()" style="accent-color: var(--gold-primary); width: 18px; height: 18px;"> 
+                        Partial Payment
+                    </label>
+                </div>
+            </div>
+
             <div style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
                 <div class="summary-row">
                     <span>Subtotal:</span>
@@ -77,12 +91,12 @@
                     <label for="discount" style="font-size: 0.8rem; color: var(--text-secondary);">Discount (₹)</label>
                     <input type="number" step="0.01" id="discount" name="discount" class="form-control" value="0.00" min="0" oninput="calculateTotals()" style="padding: 0.4rem;">
                 </div>
-                <div class="form-group" style="margin-bottom: 0.5rem;">
+                <div class="form-group" id="amountPaidGroup" style="margin-bottom: 0.5rem; display: none;">
                     <label for="amount_paid" style="font-size: 0.8rem; color: var(--text-secondary);">Amount Paid (₹)</label>
-                    <input type="number" step="0.01" id="amount_paid" name="amount_paid" class="form-control" placeholder="Fully Paid" oninput="calculateTotals()" style="padding: 0.4rem;">
-                    <small style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-top: 2px;">Leave empty if fully paid.</small>
+                    <input type="number" step="0.01" id="amount_paid" name="amount_paid" class="form-control" placeholder="0.00" oninput="calculateTotals()" style="padding: 0.4rem;">
+                    <small style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-top: 2px;">Enter actual amount received.</small>
                 </div>
-                <div class="summary-row" style="margin-bottom: 0.5rem; font-size: 0.95rem;">
+                <div class="summary-row" id="dueBalanceRow" style="margin-bottom: 0.5rem; font-size: 0.95rem; display: none;">
                     <span>Due Balance:</span>
                     <strong id="dueBalance" style="color: #C62828;">₹0.00</strong>
                 </div>
@@ -214,6 +228,27 @@
         calculateTotals();
     }
 
+    function togglePaymentTerms() {
+        const isPartial = document.querySelector('input[name="payment_term"]:checked').value === 'partial';
+        const amountPaidGroup = document.getElementById('amountPaidGroup');
+        const amountPaidInput = document.getElementById('amount_paid');
+        const dueBalanceRow = document.getElementById('dueBalanceRow');
+        
+        if (isPartial) {
+            amountPaidGroup.style.display = 'block';
+            dueBalanceRow.style.display = 'flex';
+            amountPaidInput.value = '';
+            amountPaidInput.required = true;
+            amountPaidInput.focus();
+        } else {
+            amountPaidGroup.style.display = 'none';
+            dueBalanceRow.style.display = 'none';
+            amountPaidInput.value = '';
+            amountPaidInput.required = false;
+        }
+        calculateTotals();
+    }
+
     function calculateTotals() {
         let subtotal = 0;
         const rows = document.querySelectorAll('.invoice-row');
@@ -229,8 +264,9 @@
         const grandTotal = Math.max(0, subtotal - discount);
 
         const amountPaidInput = document.getElementById('amount_paid');
+        const isPartial = document.querySelector('input[name="payment_term"]:checked').value === 'partial';
         let amountPaid = parseFloat(amountPaidInput.value);
-        if (isNaN(amountPaid) || amountPaidInput.value.trim() === '') {
+        if (!isPartial || isNaN(amountPaid) || amountPaidInput.value.trim() === '') {
             amountPaid = grandTotal;
         }
         const due = Math.max(0, grandTotal - amountPaid);

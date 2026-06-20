@@ -450,12 +450,16 @@ def invoice_detail(invoice_id):
     customer_name = invoice.customer_name or 'PREET'
     total_display = f"{int(invoice.final_amount)}" if invoice.final_amount.is_integer() else f"{invoice.final_amount:,.2f}"
     
+    # Generate public viewing URL to download PDF
+    public_url = f"{request.url_root}invoice/public/{invoice.invoice_number}"
+    
     msg_template = (
         f"Hello {customer_name},\n\n"
         f"Thanks for visiting Fabrix and shopping with us! 🛍️\n\n"
         f"Join our community to stay updated with new collections and deals:  https://chat.whatsapp.com/DOkCF1xxaQeB0kjzjLu8UR\n\n"
         f"Your invoice for order #{invoice.invoice_number} is attached here.\n"
-        f"Total: ₹{total_display}\n\n"
+        f"Total: ₹{total_display}\n"
+        f"View & Download PDF Invoice: {public_url}\n\n"
         f"📍 SUPER MALL-2, FF/152, Infocity, Gandhinagar, Gujarat 382007\n\n"
         f"Thanks again for your purchase—hope to see you again soon! 💫"
     )
@@ -472,6 +476,11 @@ def invoice_detail(invoice_id):
         whatsapp_url = f"https://api.whatsapp.com/send?text={encoded_message}"
         
     return render_template('invoice_detail.html', invoice=invoice, whatsapp_url=whatsapp_url)
+
+@app.route('/invoice/public/<string:invoice_number>')
+def public_invoice(invoice_number):
+    invoice = Invoice.query.filter_by(invoice_number=invoice_number).first_or_404()
+    return render_template('invoice_detail.html', invoice=invoice, is_public=True)
 
 # ----------------- DEALER PURCHASES ROUTES -----------------
 
