@@ -9,7 +9,8 @@ import openpyxl
 import csv
 import io
 
-from models import db, User, Product, Invoice, InvoiceItem, DealerPurchase
+from models import db, User, Product, Invoice, InvoiceItem, DealerPurchase, SystemSetting
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fabrix-secret-key-12345')
@@ -86,9 +87,130 @@ def logout():
 
 # ----------------- DASHBOARD ROUTE -----------------
 
+import threading
+
+def send_backup_email_async(app_context, smtp_server, smtp_port, smtp_email, smtp_password, receiver_email):
+    with app_context:
+        try:
+            import json
+            import io
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.mime.base import MIMEBase
+            from email import encoders
+            
+            # 1. Compile the backup JSON
+            data = {
+                'users': [{'username': u.username, 'role': u.role} for u in User.query.all()],
+                'products': [{'name': p.name, 'quantity': p.quantity, 'selling_price': p.selling_price, 'cost_price': p.cost_price} for p in Product.query.all()],
+                'invoices': [{
+                    'invoice_number': i.invoice_number,
+                    'customer_name': i.customer_name,
+                    'customer_phone': i.customer_phone,
+                    'total_amount': i.total_amount,
+                    'discount': i.discount,
+                    'final_amount': i.final_amount,
+                    'amount_paid': i.amount_paid,
+                    'payment_status': i.payment_status,
+                    'payment_method': i.payment_method,
+                    'date_created': i.date_created.isoformat(),
+                    'items': [{'product_name': item.product_name, 'quantity': item.quantity, 'selling_price': item.selling_price, 'cost_price': item.cost_price} for item in i.items]
+                } for i in Invoice.query.all()],
+                'purchases': [{
+                    'dealer_name': p.dealer_name,
+                    'product_description': p.product_description,
+                    'quantity': p.quantity,
+                    'total_cost': p.total_cost,
+                    'amount_paid': p.amount_paid,
+                    'payment_status': p.payment_status,
+                    'date_created': p.date_created.isoformat()
+                } for p in DealerPurchase.query.all()]
+            }
+            
+            json_data = json.dumps(data, indent=4)
+            
+            # 2. Construct the Email
+            msg = MIMEMultipart()
+            msg['From'] = smtp_email
+            msg['To'] = receiver_email
+            msg['Subject'] = f"Fabrix Automated Database Backup - {datetime.now().strftime('%d-%b-%Y')}"
+            
+            body = (
+                f"Hello Sagar Chawariya,\n\n"
+                f"This is an automated 30-day database backup for your Fabrix Admin Panel.\n"
+                f"Attached to this email is a backup file containing all products, invoices, customers, and dealer purchases.\n\n"
+                f"Store Domain: https://fabrfix.sbs\n"
+                f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+                f"Best regards,\n"
+                f"Fabrix Automated Backup Engine"
+            )
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Attachment
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(json_data.encode('utf-8'))
+            encoders.encode_base64(part)
+            filename = f"fabrix_db_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            part.add_header('Content-Disposition', f"attachment; filename= {filename}")
+            msg.attach(part)
+            
+            # 3. Send Email via SMTP
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, receiver_email, msg.as_string())
+            server.quit()
+            
+            # 4. Update the Setting
+            db.session.query(SystemSetting).filter_by(key='last_backup_date').delete()
+            setting = SystemSetting(key='last_backup_date', value=datetime.utcnow().date().isoformat())
+            db.session.add(setting)
+            db.session.commit()
+            print("--- Automated backup email sent successfully! ---")
+            
+        except Exception as e:
+            print(f"--- Automated backup email failed: {str(e)} ---")
+
+def check_and_trigger_backup():
+    smtp_server = os.environ.get('SMTP_SERVER')
+    smtp_port = os.environ.get('SMTP_PORT', '465')
+    smtp_email = os.environ.get('SMTP_EMAIL')
+    smtp_password = os.environ.get('SMTP_PASSWORD')
+    receiver_email = os.environ.get('BACKUP_EMAIL', 'sagarsarajput7773@gmail.com')
+    
+    if not smtp_server or not smtp_email or not smtp_password:
+        return
+        
+    try:
+        setting = db.session.get(SystemSetting, 'last_backup_date')
+        should_backup = False
+        if not setting:
+            should_backup = True
+        else:
+            last_date = datetime.strptime(setting.value, '%Y-%m-%d').date()
+            delta = datetime.utcnow().date() - last_date
+            if delta.days >= 30:
+                should_backup = True
+                
+        if should_backup:
+            app_context = app.app_context()
+            thread = threading.Thread(
+                target=send_backup_email_async,
+                args=(app_context, smtp_server, int(smtp_port), smtp_email, smtp_password, receiver_email)
+            )
+            thread.start()
+            
+    except Exception as e:
+        print(f"Error checking backup status: {str(e)}")
+
 @app.route('/')
 @login_required
 def dashboard():
+    try:
+        check_and_trigger_backup()
+    except Exception as backup_err:
+        print(f"Automated backup check failed: {str(backup_err)}")
+
     # Gather reports metrics
     invoices = Invoice.query.all()
     sales_revenue = sum(inv.final_amount for inv in invoices)

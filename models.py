@@ -73,3 +73,9 @@ class DealerPurchase(db.Model):
     @property
     def outstanding_amount(self):
         return max(0.0, self.total_cost - self.amount_paid)
+
+class SystemSetting(db.Model):
+    __tablename__ = 'system_settings'
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.String(200), nullable=False)
+
