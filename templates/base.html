@@ -10,14 +10,17 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    {% if not is_public %}
     <div class="mobile-header">
         <span class="invoice-logo" style="font-size: 1.5rem; color: var(--gold-dark);">FABRIX</span>
         <button class="menu-toggle" id="menuToggle">
             <i class="fa-solid fa-bars"></i>
         </button>
     </div>
+    {% endif %}
 
     <div class="app-container">
+        {% if not is_public %}
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="brand">FABRIX</div>
@@ -66,9 +69,11 @@
                 </a>
             </div>
         </aside>
+        {% endif %}
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main class="main-content" {% if is_public %}style="margin-left: 0; padding: 2rem 1rem;"{% endif %}>
+            {% if not is_public %}
             <!-- Breadcrumbs / Top Header for Desktop -->
             <header class="top-header">
                 <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
@@ -76,6 +81,7 @@
                     {% block header_actions %}{% endblock %}
                 </div>
             </header>
+            {% endif %}
 
             <!-- Flash Messages -->
             {% with messages = get_flashed_messages(with_categories=true) %}
