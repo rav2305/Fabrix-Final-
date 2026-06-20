@@ -917,6 +917,63 @@ def delete_user(user_id):
         flash("User not found.", "error")
     return redirect(url_for('users'))
 
+@app.route('/admin/backup-db')
+@login_required
+def backup_database():
+    if not current_user.is_admin():
+        flash("Unauthorized access.", "error")
+        return redirect(url_for('dashboard'))
+        
+    db_path = os.path.join(app.instance_path, 'fabrix.db')
+    if os.path.exists(db_path) and app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
+        from flask import send_file
+        return send_file(
+            db_path,
+            as_attachment=True,
+            download_name=f"fabrix_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        )
+    else:
+        import json
+        from flask import send_file
+        data = {
+            'users': [{'username': u.username, 'role': u.role} for u in User.query.all()],
+            'products': [{'name': p.name, 'quantity': p.quantity, 'selling_price': p.selling_price, 'cost_price': p.cost_price} for p in Product.query.all()],
+            'invoices': [{
+                'invoice_number': i.invoice_number,
+                'customer_name': i.customer_name,
+                'customer_phone': i.customer_phone,
+                'total_amount': i.total_amount,
+                'discount': i.discount,
+                'final_amount': i.final_amount,
+                'amount_paid': i.amount_paid,
+                'payment_status': i.payment_status,
+                'payment_method': i.payment_method,
+                'date_created': i.date_created.isoformat(),
+                'items': [{'product_name': item.product_name, 'quantity': item.quantity, 'selling_price': item.selling_price, 'cost_price': item.cost_price} for item in i.items]
+            } for i in Invoice.query.all()],
+            'purchases': [{
+                'dealer_name': p.dealer_name,
+                'product_description': p.product_description,
+                'quantity': p.quantity,
+                'total_cost': p.total_cost,
+                'amount_paid': p.amount_paid,
+                'payment_status': p.payment_status,
+                'date_created': p.date_created.isoformat()
+            } for p in DealerPurchase.query.all()]
+        }
+        
+        file_stream = io.BytesIO()
+        file_stream.write(json.dumps(data, indent=4).encode('utf-8'))
+        file_stream.seek(0)
+        
+        return send_file(
+            file_stream,
+            mimetype="application/json",
+            as_attachment=True,
+            download_name=f"fabrix_db_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+
 # Run server
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', use_reloader=False)

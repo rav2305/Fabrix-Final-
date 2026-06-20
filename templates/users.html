@@ -87,4 +87,16 @@
         </form>
     </div>
 </div>
+
+<div class="card" style="padding: 1.5rem; margin-top: 2rem; border-top: 3px solid var(--gold-primary); max-width: 600px;">
+    <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark); margin-bottom: 1.2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <i class="fa-solid fa-database"></i> Database Backup & Protection
+    </h3>
+    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
+        Prevent data loss by downloading a backup copy of your database. If you are using SQLite locally, this downloads the raw database file. If you are running on PostgreSQL in the cloud, this downloads a structured JSON file containing all users, products, sales invoices, and dealer transactions.
+    </p>
+    <a href="{{ url_for('backup_database') }}" class="btn btn-primary" style="display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; max-width: 300px; padding: 0.8rem 1.2rem; background: linear-gradient(135deg, #AA7C11 0%, #D4AF37 100%); text-decoration: none; border-radius: 4px; font-weight: 600; color: white;">
+        <i class="fa-solid fa-cloud-arrow-down"></i> Download Backup File
+    </a>
+</div>
 {% endblock %}
