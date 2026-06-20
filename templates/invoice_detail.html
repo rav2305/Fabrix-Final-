@@ -22,9 +22,9 @@
     
     {% if not is_public %}
     <!-- Share WhatsApp Button -->
-    <a href="{{ whatsapp_url }}" target="_blank" class="btn btn-secondary" style="background-color: #25D366; color: white; border-color: #25D366;">
+    <button onclick="shareInvoice()" class="btn btn-secondary" style="background-color: #25D366; color: white; border-color: #25D366; cursor: pointer;">
         <i class="fa-brands fa-whatsapp"></i> Share on WhatsApp
-    </a>
+    </button>
     
     {% if invoice.outstanding_amount > 0 %}
     <button onclick="openPaymentModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #AA7C11 0%, #D4AF37 100%); border-color: #AA7C11;">
@@ -235,6 +235,66 @@
             jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
         html2pdf().set(opt).from(element).save();
+    }
+
+    async function shareInvoice() {
+        const element = document.querySelector('.invoice-print-container');
+        const opt = {
+            margin:       [0.4, 0.4, 0.4, 0.4],
+            filename:     '{{ invoice.invoice_number }}.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Extract WhatsApp message body from the generated URL
+        const fullWhatsappUrl = "{{ whatsapp_url|safe }}";
+        let messageText = "";
+        
+        // Find text parameter
+        const textParamIndex = fullWhatsappUrl.indexOf("text=");
+        if (textParamIndex !== -1) {
+            messageText = decodeURIComponent(fullWhatsappUrl.substring(textParamIndex + 5));
+        }
+
+        // Try using Web Share API first if supported
+        if (navigator.share && navigator.canShare) {
+            try {
+                // Show loading state on button
+                const shareBtn = document.querySelector('[onclick="shareInvoice()"]');
+                const origHtml = shareBtn.innerHTML;
+                shareBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Attaching PDF...';
+                shareBtn.disabled = true;
+
+                const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
+                const pdfFile = new File([pdfBlob], '{{ invoice.invoice_number }}.pdf', { type: "application/pdf" });
+                
+                const shareData = {
+                    files: [pdfFile],
+                    title: 'Invoice {{ invoice.invoice_number }}',
+                    text: messageText
+                };
+
+                shareBtn.innerHTML = origHtml;
+                shareBtn.disabled = false;
+
+                if (navigator.canShare(shareData)) {
+                    await navigator.share(shareData);
+                    return; // Successfully shared natively!
+                }
+            } catch (err) {
+                console.error('Error with Web Share API:', err);
+                // Reset button on error
+                const shareBtn = document.querySelector('[onclick="shareInvoice()"]');
+                if (shareBtn) {
+                    shareBtn.innerHTML = '<i class="fa-brands fa-whatsapp"></i> Share on WhatsApp';
+                    shareBtn.disabled = false;
+                }
+            }
+        }
+
+        // Fallback: Open standard WhatsApp URL
+        window.open(fullWhatsappUrl, "_blank");
     }
 
     {% if not is_public and invoice.outstanding_amount > 0 %}
