@@ -41,8 +41,14 @@ class Invoice(db.Model):
     total_amount = db.Column(db.Float, nullable=False, default=0.0)
     discount = db.Column(db.Float, nullable=False, default=0.0)
     final_amount = db.Column(db.Float, nullable=False, default=0.0)
+    amount_paid = db.Column(db.Float, nullable=False, default=0.0)  # Amount actually paid
+    payment_status = db.Column(db.String(20), nullable=False, default='Paid')  # 'Paid', 'Partial', 'Unpaid'
     payment_method = db.Column(db.String(50), nullable=False, default='Cash')  # Cash, Card, UPI, etc.
     items = db.relationship('InvoiceItem', backref='invoice', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def outstanding_amount(self):
+        return max(0.0, self.final_amount - self.amount_paid)
 
 class InvoiceItem(db.Model):
     __tablename__ = 'invoice_items'

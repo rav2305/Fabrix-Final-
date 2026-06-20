@@ -114,6 +114,32 @@
                 <td>Grand Total:</td>
                 <td style="text-align: right;">₹{{ "{:,.2f}".format(invoice.final_amount) }}</td>
             </tr>
+            <tr>
+                <td style="color: var(--text-secondary);">Amount Paid:</td>
+                <td style="text-align: right; font-weight: 500; color: #2E7D32;">
+                    ₹{{ "{:,.2f}".format(invoice.amount_paid) }}
+                </td>
+            </tr>
+            {% if invoice.outstanding_amount > 0 %}
+            <tr>
+                <td style="color: var(--text-secondary); font-weight: 500;">Due Balance:</td>
+                <td style="text-align: right; font-weight: 600; color: #C62828;">
+                    ₹{{ "{:,.2f}".format(invoice.outstanding_amount) }}
+                </td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td style="color: var(--text-secondary);">Payment Status:</td>
+                <td style="text-align: right;">
+                    {% if invoice.payment_status == 'Paid' %}
+                    <span class="badge badge-success" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">Paid</span>
+                    {% elif invoice.payment_status == 'Partial' %}
+                    <span class="badge badge-warning" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">Partial</span>
+                    {% else %}
+                    <span class="badge badge-danger" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">Unpaid</span>
+                    {% endif %}
+                </td>
+            </tr>
         </table>
     </div>
 

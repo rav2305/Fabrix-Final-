@@ -373,7 +373,7 @@ def create_invoice():
         # Count number of invoices today to generate sequential ID
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_count = Invoice.query.filter(Invoice.date_created >= today_start).count()
-        invoice_number = f"FAB-{date_str}-{str(today_count + 1).zfill(3)}"
+        invoice_number = f"ORD-{date_str}-{str(today_count + 1).zfill(3)}"
         
         # Calculate pricing
         subtotal = 0.0
@@ -403,6 +403,21 @@ def create_invoice():
         
         final_amount = max(0.0, subtotal - discount)
         
+        # Capture paid amount and calculate status
+        amount_paid_raw = request.form.get('amount_paid', '').strip()
+        if amount_paid_raw == '':
+            amount_paid = final_amount
+        else:
+            amount_paid = float(amount_paid_raw)
+            
+        if amount_paid >= final_amount:
+            amount_paid = final_amount
+            payment_status = 'Paid'
+        elif amount_paid > 0:
+            payment_status = 'Partial'
+        else:
+            payment_status = 'Unpaid'
+            
         # Save invoice record
         invoice = Invoice(
             invoice_number=invoice_number,
@@ -411,6 +426,8 @@ def create_invoice():
             discount=discount,
             total_amount=subtotal,
             final_amount=final_amount,
+            amount_paid=amount_paid,
+            payment_status=payment_status,
             payment_method=payment_method,
             items=invoice_items
         )
@@ -429,25 +446,18 @@ def create_invoice():
 def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     
-    # Generate WhatsApp message body
-    items_list_str = ""
-    for item in invoice.items:
-        items_list_str += f"- {item.product_name} (Qty: {item.quantity}) @ ₹{item.selling_price:.2f} = ₹{(item.selling_price * item.quantity):.2f}\n"
-        
+    # Generate WhatsApp message body based on exact user requested template
+    customer_name = invoice.customer_name or 'PREET'
+    total_display = f"{int(invoice.final_amount)}" if invoice.final_amount.is_integer() else f"{invoice.final_amount:,.2f}"
+    
     msg_template = (
-        f"*FABRIX INVOICE*\n"
-        f"Invoice No: {invoice.invoice_number}\n"
-        f"Date: {invoice.date_created.strftime('%d-%b-%Y %I:%M %p')}\n"
-        f"Customer: {invoice.customer_name or 'Walk-in'}\n"
-        f"----------------------------------\n"
-        f"*Items:*\n"
-        f"{items_list_str}"
-        f"----------------------------------\n"
-        f"Subtotal: ₹{invoice.total_amount:.2f}\n"
-        f"Discount: ₹{invoice.discount:.2f}\n"
-        f"*Grand Total: ₹{invoice.final_amount:.2f}*\n"
-        f"Payment Method: {invoice.payment_method}\n\n"
-        f"Thank you for shopping at Fabrix!"
+        f"Hello {customer_name},\n\n"
+        f"Thanks for visiting Fabrix and shopping with us! 🛍️\n\n"
+        f"Join our community to stay updated with new collections and deals:  https://chat.whatsapp.com/DOkCF1xxaQeB0kjzjLu8UR\n\n"
+        f"Your invoice for order #{invoice.invoice_number} is attached here.\n"
+        f"Total: ₹{total_display}\n\n"
+        f"📍 SUPER MALL-2, FF/152, Infocity, Gandhinagar, Gujarat 382007\n\n"
+        f"Thanks again for your purchase—hope to see you again soon! 💫"
     )
     
     # URL encode parameters

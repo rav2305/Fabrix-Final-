@@ -77,6 +77,15 @@
                     <label for="discount" style="font-size: 0.8rem; color: var(--text-secondary);">Discount (₹)</label>
                     <input type="number" step="0.01" id="discount" name="discount" class="form-control" value="0.00" min="0" oninput="calculateTotals()" style="padding: 0.4rem;">
                 </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label for="amount_paid" style="font-size: 0.8rem; color: var(--text-secondary);">Amount Paid (₹)</label>
+                    <input type="number" step="0.01" id="amount_paid" name="amount_paid" class="form-control" placeholder="Fully Paid" oninput="calculateTotals()" style="padding: 0.4rem;">
+                    <small style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-top: 2px;">Leave empty if fully paid.</small>
+                </div>
+                <div class="summary-row" style="margin-bottom: 0.5rem; font-size: 0.95rem;">
+                    <span>Due Balance:</span>
+                    <strong id="dueBalance" style="color: #C62828;">₹0.00</strong>
+                </div>
                 <div class="summary-row total">
                     <span>Grand Total:</span>
                     <strong id="summaryGrandTotal">₹0.00</strong>
@@ -219,8 +228,16 @@
         const discount = parseFloat(document.getElementById('discount').value) || 0;
         const grandTotal = Math.max(0, subtotal - discount);
 
+        const amountPaidInput = document.getElementById('amount_paid');
+        let amountPaid = parseFloat(amountPaidInput.value);
+        if (isNaN(amountPaid) || amountPaidInput.value.trim() === '') {
+            amountPaid = grandTotal;
+        }
+        const due = Math.max(0, grandTotal - amountPaid);
+
         document.getElementById('summarySubtotal').textContent = `₹${subtotal.toFixed(2)}`;
         document.getElementById('summaryGrandTotal').textContent = `₹${grandTotal.toFixed(2)}`;
+        document.getElementById('dueBalance').textContent = `₹${due.toFixed(2)}`;
     }
 
     // Double check form before submitting
