@@ -26,6 +26,12 @@
         <i class="fa-brands fa-whatsapp"></i> Share on WhatsApp
     </a>
     
+    {% if invoice.outstanding_amount > 0 %}
+    <button onclick="openPaymentModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #AA7C11 0%, #D4AF37 100%); border-color: #AA7C11;">
+        <i class="fa-solid fa-indian-rupee-sign"></i> Update Payment
+    </button>
+    {% endif %}
+    
     <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
         <i class="fa-solid fa-chevron-left"></i> Dashboard
     </a>
@@ -161,6 +167,59 @@
         <p>This is a computer-generated invoice. Terms & Conditions apply.</p>
     </div>
 </div>
+{% if not is_public and invoice.outstanding_amount > 0 %}
+<!-- Modal: Update Payment -->
+<div class="modal" id="paymentModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Update Customer Payment</h3>
+            <button class="close-modal" onclick="closePaymentModal()">&times;</button>
+        </div>
+        <form action="{{ url_for('update_invoice_payment') }}" method="POST">
+            <input type="hidden" name="id" value="{{ invoice.id }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Invoice Number</label>
+                    <input type="text" class="form-control" value="{{ invoice.invoice_number }}" readonly style="background-color: var(--bg-secondary);">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Grand Total</label>
+                        <input type="text" class="form-control" value="₹{{ '{:,.2f}'.format(invoice.final_amount) }}" readonly style="background-color: var(--bg-secondary);">
+                    </div>
+                    <div class="form-group">
+                        <label>Currently Paid</label>
+                        <input type="text" class="form-control" value="₹{{ '{:,.2f}'.format(invoice.amount_paid) }}" readonly style="background-color: var(--bg-secondary);">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label style="font-weight: 600; color: #C62828;">Outstanding Balance: ₹{{ '{:,.2f}'.format(invoice.outstanding_amount) }}</label>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="amount_received">Amount Received Now (₹)</label>
+                        <input type="number" step="0.01" id="amount_received" name="amount_received" class="form-control" required min="0.01" max="{{ invoice.outstanding_amount }}" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="payment_method">Payment Method</label>
+                        <select name="payment_method" id="payment_method" class="form-control">
+                            <option value="Cash" {% if invoice.payment_method == 'Cash' %}selected{% endif %}>Cash</option>
+                            <option value="UPI / QR Code" {% if invoice.payment_method == 'UPI / QR Code' %}selected{% endif %}>UPI / QR Code</option>
+                            <option value="Card" {% if invoice.payment_method == 'Card' %}selected{% endif %}>Card</option>
+                            <option value="Net Banking" {% if invoice.payment_method == 'Net Banking' %}selected{% endif %}>Net Banking</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closePaymentModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Record Payment</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -177,5 +236,21 @@
         };
         html2pdf().set(opt).from(element).save();
     }
+
+    {% if not is_public and invoice.outstanding_amount > 0 %}
+    const paymentModal = document.getElementById('paymentModal');
+    function openPaymentModal() {
+        paymentModal.style.display = 'flex';
+        document.getElementById('amount_received').focus();
+    }
+    function closePaymentModal() {
+        paymentModal.style.display = 'none';
+    }
+    window.onclick = function(event) {
+        if (event.target === paymentModal) {
+            closePaymentModal();
+        }
+    }
+    {% endif %}
 </script>
 {% endblock %}

@@ -41,6 +41,11 @@
                             <i class="fa-solid fa-file-invoice-dollar"></i> New Invoice
                         </a>
                     </li>
+                    <li class="{% if request.endpoint == 'invoices_history' %}active{% endif %}">
+                        <a href="{{ url_for('invoices_history') }}">
+                            <i class="fa-solid fa-receipt"></i> Orders History
+                        </a>
+                    </li>
                     <li class="{% if request.endpoint == 'purchases' %}active{% endif %}">
                         <a href="{{ url_for('purchases') }}">
                             <i class="fa-solid fa-truck-ramp-box"></i> Dealer Purchases

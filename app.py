@@ -482,6 +482,79 @@ def public_invoice(invoice_number):
     invoice = Invoice.query.filter_by(invoice_number=invoice_number).first_or_404()
     return render_template('invoice_detail.html', invoice=invoice, is_public=True)
 
+@app.route('/invoices')
+@login_required
+def invoices_history():
+    invoice_number = request.args.get('invoice_number', '').strip()
+    customer_name = request.args.get('customer_name', '').strip()
+    payment_status = request.args.get('payment_status', '').strip()
+    start_date_str = request.args.get('start_date', '').strip()
+    end_date_str = request.args.get('end_date', '').strip()
+    
+    query = Invoice.query
+    
+    if invoice_number:
+        query = query.filter(Invoice.invoice_number.ilike(f"%{invoice_number}%"))
+        
+    if customer_name:
+        query = query.filter(Invoice.customer_name.ilike(f"%{customer_name}%"))
+        
+    if payment_status:
+        query = query.filter(Invoice.payment_status == payment_status)
+        
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            query = query.filter(Invoice.date_created >= start_date)
+        except ValueError:
+            pass
+            
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+            query = query.filter(Invoice.date_created <= end_date)
+        except ValueError:
+            pass
+            
+    invoices = query.order_by(Invoice.date_created.desc()).all()
+    return render_template('invoices.html', invoices=invoices)
+
+@app.route('/invoice/update-payment', methods=['POST'])
+@login_required
+def update_invoice_payment():
+    invoice_id = request.form.get('id')
+    amount_received = float(request.form.get('amount_received') or 0.0)
+    payment_method = request.form.get('payment_method', 'Cash')
+    
+    invoice = Invoice.query.get(invoice_id)
+    if not invoice:
+        flash("Invoice not found.", "error")
+        return redirect(url_for('dashboard'))
+        
+    if amount_received <= 0:
+        flash("Please enter a valid payment amount.", "error")
+        return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+        
+    if amount_received > invoice.outstanding_amount:
+        flash(f"Amount received (₹{amount_received}) cannot exceed outstanding balance (₹{invoice.outstanding_amount}).", "error")
+        return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+        
+    invoice.amount_paid += amount_received
+    invoice.payment_method = payment_method
+    
+    # Recalculate status
+    if invoice.amount_paid >= invoice.final_amount:
+        invoice.amount_paid = invoice.final_amount
+        invoice.payment_status = 'Paid'
+    elif invoice.amount_paid > 0:
+        invoice.payment_status = 'Partial'
+    else:
+        invoice.payment_status = 'Unpaid'
+        
+    db.session.commit()
+    flash(f"Payment of ₹{amount_received:.2f} recorded successfully.", "success")
+    return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
 # ----------------- DEALER PURCHASES ROUTES -----------------
 
 @app.route('/purchases')

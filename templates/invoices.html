@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Orders History - Fabrix Admin{% endblock %}
+
+{% block page_title %}Orders & Sales History{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('create_invoice') }}" class="btn btn-primary">
+    <i class="fa-solid fa-plus"></i> New Invoice
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filtering Panel -->
+<div class="card" style="padding: 1.5rem; margin-bottom: 2rem;">
+    <h3 style="margin-bottom: 1.2rem; color: var(--gold-dark); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <i class="fa-solid fa-filter"></i> Filter Orders
+    </h3>
+    
+    <form action="{{ url_for('invoices_history') }}" method="GET" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.2rem; align-items: flex-end;">
+        <!-- Invoice Number -->
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="invoice_number">Order ID / Invoice No</label>
+            <input type="text" id="invoice_number" name="invoice_number" class="form-control" placeholder="e.g. ORD-2026" value="{{ request.args.get('invoice_number', '') }}" autocomplete="off">
+        </div>
+        
+        <!-- Customer Name -->
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="customer_name">Customer Name</label>
+            <input type="text" id="customer_name" name="customer_name" class="form-control" placeholder="Search customer..." value="{{ request.args.get('customer_name', '') }}" autocomplete="off">
+        </div>
+
+        <!-- Payment Status -->
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="payment_status">Payment Status</label>
+            <select id="payment_status" name="payment_status" class="form-control">
+                <option value="">All Statuses</option>
+                <option value="Paid" {% if request.args.get('payment_status') == 'Paid' %}selected{% endif %}>Paid</option>
+                <option value="Partial" {% if request.args.get('payment_status') == 'Partial' %}selected{% endif %}>Partial</option>
+                <option value="Unpaid" {% if request.args.get('payment_status') == 'Unpaid' %}selected{% endif %}>Unpaid</option>
+            </select>
+        </div>
+
+        <!-- Date From -->
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="start_date">From Date</label>
+            <input type="date" id="start_date" name="start_date" class="form-control" value="{{ request.args.get('start_date', '') }}">
+        </div>
+
+        <!-- Date To -->
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="end_date">To Date</label>
+            <input type="date" id="end_date" name="end_date" class="form-control" value="{{ request.args.get('end_date', '') }}">
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <a href="{{ url_for('invoices_history') }}" class="btn btn-secondary" style="padding: 0.7rem 1rem;">
+                Reset
+            </a>
+            <button type="submit" class="btn btn-primary" style="padding: 0.7rem 1.2rem;">
+                <i class="fa-solid fa-magnifying-glass"></i> Filter
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Orders Table -->
+<div class="card" style="padding: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem;">
+        <h3 style="font-family: var(--font-serif); font-size: 1.5rem; color: var(--gold-dark);">Transactions</h3>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);">Found {{ invoices|length }} order records</span>
+    </div>
+    
+    <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Customer Name</th>
+                    <th>Date Created</th>
+                    <th>Total Bill</th>
+                    <th>Amount Paid</th>
+                    <th>Due Balance</th>
+                    <th>Status</th>
+                    <th>Method</th>
+                    <th class="no-print">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in invoices %}
+                <tr>
+                    <td><strong>{{ invoice.invoice_number }}</strong></td>
+                    <td>
+                        {{ invoice.customer_name or 'Walk-in Customer' }}
+                        {% if invoice.customer_phone %}
+                        <br><small style="color: var(--text-secondary);">{{ invoice.customer_phone }}</small>
+                        {% endif %}
+                    </td>
+                    <td>{{ invoice.date_created.strftime('%d-%b-%Y %I:%M %p') }}</td>
+                    <td><strong>₹{{ "{:,.2f}".format(invoice.final_amount) }}</strong></td>
+                    <td>₹{{ "{:,.2f}".format(invoice.amount_paid) }}</td>
+                    <td style="font-weight: 600; color: {% if invoice.outstanding_amount > 0 %}#C62828{% else %}inherit{% endif %};">
+                        ₹{{ "{:,.2f}".format(invoice.outstanding_amount) }}
+                    </td>
+                    <td>
+                        {% if invoice.payment_status == 'Paid' %}
+                        <span class="badge badge-success">Paid</span>
+                        {% elif invoice.payment_status == 'Partial' %}
+                        <span class="badge badge-warning">Partial</span>
+                        {% else %}
+                        <span class="badge badge-danger">Unpaid</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge" style="background-color: var(--gold-light); color: var(--gold-dark);">{{ invoice.payment_method }}</span></td>
+                    <td class="no-print">
+                        <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="btn btn-secondary btn-small" title="View details and PDF">
+                            <i class="fa-solid fa-eye"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <i class="fa-solid fa-receipt" style="font-size: 3rem; color: var(--gold-light); margin-bottom: 1rem; display: block;"></i>
+                        No orders match your filter criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
