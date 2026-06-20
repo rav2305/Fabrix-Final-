@@ -198,9 +198,47 @@ def delete_product(product_id):
         flash("Product not found.", "error")
     return redirect(url_for('stock'))
 
+@app.route('/stock/download-template')
+@login_required
+def download_stock_template():
+    import io
+    from openpyxl import Workbook
+    from flask import send_file
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Fabrix Stock Template"
+    
+    # Write headers
+    headers = ["Product Name", "Qty", "Selling Price", "Price for us"]
+    ws.append(headers)
+    
+    # Write some sample rows
+    ws.append(["Sample Denim Jacket", 50, 1500.0, 900.0])
+    ws.append(["Sample Cotton T-Shirt", 120, 450.0, 200.0])
+    ws.append(["Sample Linen Trousers", 30, 1200.0, 700.0])
+    
+    # Adjust column widths
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = col[0].column_letter
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 15)
+        
+    file_stream = io.BytesIO()
+    wb.save(file_stream)
+    file_stream.seek(0)
+    
+    return send_file(
+        file_stream,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="fabrix_stock_template.xlsx"
+    )
+
 @app.route('/stock/bulk-upload', methods=['POST'])
 @login_required
 def bulk_upload():
+    import json
     if 'excel_file' not in request.files:
         flash("No file uploaded.", "error")
         return redirect(url_for('stock'))
@@ -244,14 +282,14 @@ def bulk_upload():
                         col_mapping = {'name': 0, 'quantity': 1, 'selling_price': 2, 'cost_price': 3}
                         break
                     else:
-                        flash(f"CSV is missing required headers: 'Product Name', 'Qty', 'Selling Price', 'Price for us'. Found headers: {headers}", "error")
+                        flash(f"CSV is missing required headers. Found headers: {headers}", "error")
                         return redirect(url_for('stock'))
             
             for row in reader:
                 if not row or len(row) <= max(col_mapping.values()):
                     continue
                 rows_data.append({
-                    'name': row[col_mapping['name']].strip(),
+                    'name': row[col_mapping['name']],
                     'quantity': row[col_mapping['quantity']],
                     'selling_price': row[col_mapping['selling_price']],
                     'cost_price': row[col_mapping['cost_price']]
@@ -290,7 +328,7 @@ def bulk_upload():
                         col_mapping = {'name': 0, 'quantity': 1, 'selling_price': 2, 'cost_price': 3}
                         break
                     else:
-                        flash(f"Excel is missing required headers: 'Product Name', 'Qty', 'Selling Price', 'Price for us'. Found headers: {headers}", "error")
+                        flash(f"Excel is missing required headers. Found headers: {headers}", "error")
                         return redirect(url_for('stock'))
             
             # Read rows starting from row 2
@@ -298,39 +336,142 @@ def bulk_upload():
                 if not row or len(row) <= max(col_mapping.values()):
                     continue
                 name_val = row[col_mapping['name']]
-                if name_val is None:
-                    continue
                 rows_data.append({
-                    'name': str(name_val).strip(),
+                    'name': name_val,
                     'quantity': row[col_mapping['quantity']],
                     'selling_price': row[col_mapping['selling_price']],
                     'cost_price': row[col_mapping['cost_price']]
                 })
         
-        # Process database transactions
-        added = 0
-        updated = 0
-        for row in rows_data:
+        # Analyze and validate data
+        valid_rows = []
+        invalid_rows = []
+        new_count = 0
+        update_count = 0
+        
+        for index, row in enumerate(rows_data):
             name = row['name']
-            if not name or name.lower() == 'nan' or name == '':
+            qty_raw = row['quantity']
+            selling_raw = row['selling_price']
+            cost_raw = row['cost_price']
+            row_num = index + 2
+            
+            if name is None or str(name).strip() == "" or str(name).lower() == 'nan':
+                invalid_rows.append({
+                    'row': row_num,
+                    'product_name': '[Empty]',
+                    'error': "Product Name is empty or invalid"
+                })
                 continue
                 
-            # Parse metrics safely
+            name_str = str(name).strip()
+            
+            # Parse qty
             try:
-                qty = int(float(row['quantity'] or 0))
-            except:
-                qty = 0
+                if qty_raw is None or str(qty_raw).strip() == "":
+                    qty = 0
+                else:
+                    qty = int(float(str(qty_raw).strip()))
+                if qty < 0:
+                    raise ValueError("Negative stock quantity")
+            except Exception as e:
+                invalid_rows.append({
+                    'row': row_num,
+                    'product_name': name_str,
+                    'error': f"Invalid Quantity: '{qty_raw}' ({str(e)})"
+                })
+                continue
                 
+            # Parse selling price
             try:
-                selling = float(row['selling_price'] or 0.0)
-            except:
-                selling = 0.0
+                if selling_raw is None or str(selling_raw).strip() == "":
+                    selling = 0.0
+                else:
+                    selling = float(str(selling_raw).strip().replace(',', ''))
+                if selling < 0:
+                    raise ValueError("Negative selling price")
+            except Exception as e:
+                invalid_rows.append({
+                    'row': row_num,
+                    'product_name': name_str,
+                    'error': f"Invalid Selling Price: '{selling_raw}' ({str(e)})"
+                })
+                continue
                 
+            # Parse cost price
             try:
-                cost = float(row['cost_price'] or 0.0)
-            except:
-                cost = 0.0
+                if cost_raw is None or str(cost_raw).strip() == "":
+                    cost = 0.0
+                else:
+                    cost = float(str(cost_raw).strip().replace(',', ''))
+                if cost < 0:
+                    raise ValueError("Negative cost price")
+            except Exception as e:
+                invalid_rows.append({
+                    'row': row_num,
+                    'product_name': name_str,
+                    'error': f"Invalid Cost Price: '{cost_raw}' ({str(e)})"
+                })
+                continue
                 
+            prod_exists = Product.query.filter_by(name=name_str).first()
+            if prod_exists:
+                update_count += 1
+                row_type = "Update"
+            else:
+                new_count += 1
+                row_type = "New Product"
+                
+            valid_rows.append({
+                'name': name_str,
+                'quantity': qty,
+                'selling_price': selling,
+                'cost_price': cost,
+                'type': row_type
+            })
+            
+        # Write valid_rows to a temporary JSON file to handle large datasets safely
+        temp_dir = os.path.join(app.instance_path, 'temp_imports')
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_filepath = os.path.join(temp_dir, f"import_{current_user.id}.json")
+        with open(temp_filepath, 'w') as f:
+            json.dump(valid_rows, f)
+            
+        return render_template(
+            'import_preview.html',
+            total_count=len(rows_data),
+            valid_count=len(valid_rows),
+            invalid_count=len(invalid_rows),
+            new_count=new_count,
+            update_count=update_count,
+            valid_rows=valid_rows,
+            invalid_rows=invalid_rows
+        )
+    except Exception as e:
+        flash(f"Bulk upload analysis failed: {str(e)}", "error")
+        return redirect(url_for('stock'))
+
+@app.route('/stock/bulk-upload/confirm', methods=['POST'])
+@login_required
+def confirm_bulk_upload():
+    import json
+    temp_filepath = os.path.join(app.instance_path, 'temp_imports', f"import_{current_user.id}.json")
+    if not os.path.exists(temp_filepath):
+        flash("No upload session found. Please re-upload your file.", "error")
+        return redirect(url_for('stock'))
+        
+    try:
+        with open(temp_filepath, 'r') as f:
+            valid_rows = json.load(f)
+            
+        added = 0
+        updated = 0
+        for row in valid_rows:
+            name = row['name']
+            qty = row['quantity']
+            selling = row['selling_price']
+            cost = row['cost_price']
+            
             prod = Product.query.filter_by(name=name).first()
             if prod:
                 prod.quantity += qty
@@ -343,10 +484,23 @@ def bulk_upload():
                 added += 1
                 
         db.session.commit()
+        os.remove(temp_filepath)
         flash(f"Success! Imported {added} new products and restocked {updated} existing products.", "success")
     except Exception as e:
-        flash(f"Bulk upload failed: {str(e)}", "error")
+        flash(f"Failed to write stock updates to database: {str(e)}", "error")
         
+    return redirect(url_for('stock'))
+
+@app.route('/stock/bulk-upload/cancel', methods=['POST'])
+@login_required
+def cancel_bulk_upload():
+    temp_filepath = os.path.join(app.instance_path, 'temp_imports', f"import_{current_user.id}.json")
+    if os.path.exists(temp_filepath):
+        try:
+            os.remove(temp_filepath)
+        except:
+            pass
+    flash("Import action canceled.", "info")
     return redirect(url_for('stock'))
 
 # ----------------- BILLING & INVOICE ROUTES -----------------

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Import Preview - Fabrix Admin{% endblock %}
+
+{% block page_title %}Bulk Import Analysis{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: 2rem; margin-bottom: 2rem;">
+    <h2 style="font-family: var(--font-serif); color: var(--gold-dark); margin-bottom: 0.5rem;">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Spreadsheet Analysis Report
+    </h2>
+    <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+        We analyzed your uploaded spreadsheet file. Review the details below before writing changes to the live product catalog.
+    </p>
+
+    <!-- Metrics Summary -->
+    <div class="summary-grid" style="margin-bottom: 2rem;">
+        <div class="card" style="border-top: 3px solid var(--gold-primary);">
+            <div class="card-title">Total Rows Analyzed</div>
+            <div class="card-value">{{ total_count }}</div>
+            <div class="card-subtitle">Rows read from sheet</div>
+        </div>
+        
+        <div class="card" style="border-top: 3px solid #2E7D32;">
+            <div class="card-title">Valid Rows (To Import)</div>
+            <div class="card-value" style="color: #2E7D32;">{{ valid_count }}</div>
+            <div class="card-subtitle">Ready to write to catalog</div>
+        </div>
+
+        <div class="card" style="border-top: 3px solid #C62828;">
+            <div class="card-title">Invalid Rows (Errors)</div>
+            <div class="card-value" style="color: #C62828;">{{ invalid_count }}</div>
+            <div class="card-subtitle">Skipped due to formatting issues</div>
+        </div>
+    </div>
+
+    <!-- Actions breakdown info -->
+    <div style="background-color: var(--bg-secondary); border-left: 4px solid var(--gold-primary); padding: 1.2rem; border-radius: 6px; margin-bottom: 2.5rem; display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div>
+            <span style="font-size: 0.85rem; color: var(--text-secondary); display: block;">New Products to Add:</span>
+            <strong style="font-size: 1.2rem; color: var(--text-primary);"><i class="fa-solid fa-plus-circle" style="color: #2E7D32;"></i> {{ new_count }} items</strong>
+        </div>
+        <div style="border-right: 1px solid var(--border-color); height: 40px; align-self: center;" class="no-print"></div>
+        <div>
+            <span style="font-size: 0.85rem; color: var(--text-secondary); display: block;">Existing Products to Restock:</span>
+            <strong style="font-size: 1.2rem; color: var(--text-primary);"><i class="fa-solid fa-arrows-rotate" style="color: var(--gold-dark);"></i> {{ update_count }} items</strong>
+        </div>
+    </div>
+
+    <!-- Confirm / Cancel Actions -->
+    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-bottom: 2rem;">
+        <form action="{{ url_for('cancel_bulk_upload') }}" method="POST">
+            <button type="submit" class="btn btn-secondary" style="padding: 0.75rem 1.5rem;">
+                Cancel Import
+            </button>
+        </form>
+        {% if valid_count > 0 %}
+        <form action="{{ url_for('confirm_bulk_upload') }}" method="POST">
+            <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #AA7C11 0%, #D4AF37 100%);">
+                <i class="fa-solid fa-circle-check"></i> Write {{ valid_count }} Products to Live Catalog
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if invalid_rows %}
+    <!-- Validation Errors Table -->
+    <h3 style="color: #C62828; margin-bottom: 1rem; font-family: var(--font-serif);">
+        <i class="fa-solid fa-triangle-exclamation"></i> formatting errors (Skipped Rows)
+    </h3>
+    <div class="table-container" style="box-shadow: none; border: 1px solid #FFCDD2; margin-bottom: 2.5rem; background-color: #FFEBEE;">
+        <table class="custom-table">
+            <thead>
+                <tr style="background-color: #FFCDD2; color: #B71C1C;">
+                    <th style="width: 10%;">Row No.</th>
+                    <th style="width: 30%;">Product Identifier</th>
+                    <th>Error Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for err in invalid_rows %}
+                <tr>
+                    <td style="font-weight: 600; color: #B71C1C;">#{{ err.row }}</td>
+                    <td><strong>{{ err.product_name }}</strong></td>
+                    <td style="color: #C62828;">{{ err.error }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if valid_rows %}
+    <!-- Valid items preview table -->
+    <h3 style="color: var(--gold-dark); margin-bottom: 1rem; font-family: var(--font-serif);">
+        <i class="fa-solid fa-list-check"></i> Preview of Verified Stock Rows (First 15 Shown)
+    </h3>
+    <div class="table-container" style="box-shadow: none; border: 1px solid var(--border-color); margin-bottom: 0;">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity to Add</th>
+                    <th>Selling Price</th>
+                    <th>Cost Price (Price for us)</th>
+                    <th>Operation Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in valid_rows[:15] %}
+                <tr>
+                    <td><strong>{{ row.name }}</strong></td>
+                    <td><span class="badge badge-success">+{{ row.quantity }} items</span></td>
+                    <td>₹{{ "{:,.2f}".format(row.selling_price) }}</td>
+                    <td>₹{{ "{:,.2f}".format(row.cost_price) }}</td>
+                    <td>
+                        {% if row.type == 'New Product' %}
+                        <span class="badge badge-success"><i class="fa-solid fa-plus-circle"></i> Create New</span>
+                        {% else %}
+                        <span class="badge badge-warning" style="background-color: var(--gold-light); color: var(--gold-dark);"><i class="fa-solid fa-arrows-rotate"></i> Restock</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
